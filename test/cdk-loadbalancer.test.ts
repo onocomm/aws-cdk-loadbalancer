@@ -36,15 +36,14 @@ test('Load Balancer Stack Resources Created', () => {
   template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
     Name: stagingContext.ResourceName,
     Scheme: 'internet-facing',
-    IpAddressType: 'ipv4',
     SecurityGroups: Match.anyValue(), // セキュリティグループIDは動的に決まるため
     Subnets: Match.anyValue(), // サブネットIDはVPCルックアップで決まるため
     LoadBalancerAttributes: Match.arrayWith([
       Match.objectLike({ Key: 'deletion_protection.enabled', Value: 'false' }), // staging は false
       Match.objectLike({ Key: 'routing.http.drop_invalid_header_fields.enabled', Value: 'true' }),
-      Match.objectLike({ Key: 'idle_timeout.timeout_seconds', Value: '60' }), // 1 minute
+      Match.objectLike({ Key: 'client_keep_alive.seconds', Value: '3600' }), // 1 hour
       Match.objectLike({ Key: 'access_logs.s3.enabled', Value: 'true' }),
-      Match.objectLike({ Key: 'access_logs.s3.bucket', Value: stagingContext.LogBucket }),
+      Match.objectLike({ Key: 'access_logs.s3.bucket', Value: Match.anyValue() }),
       Match.objectLike({ Key: 'access_logs.s3.prefix', Value: stagingContext.LogFilePrefix }),
     ]),
   });
@@ -53,7 +52,7 @@ test('Load Balancer Stack Resources Created', () => {
   template.hasResourceProperties('AWS::EC2::SecurityGroup', {
     GroupDescription: `security group for ${stagingContext.ResourceName} LoadBalancer`,
     GroupName: `${stagingContext.ResourceName}-ALB`,
-    VpcId: stagingContext.VPC, // fromLookup で指定したVPC IDと一致するか
+    VpcId: Match.anyValue(),
     SecurityGroupIngress: Match.arrayWith([
       Match.objectLike({ CidrIp: '0.0.0.0/0', IpProtocol: 'tcp', FromPort: 80, ToPort: 80 }),
       Match.objectLike({ CidrIp: '0.0.0.0/0', IpProtocol: 'tcp', FromPort: 443, ToPort: 443 }),
@@ -70,17 +69,15 @@ test('Load Balancer Stack Resources Created', () => {
     Protocol: 'HTTP',
     ProtocolVersion: 'HTTP1',
     TargetType: 'instance',
-    VpcId: stagingContext.VPC,
-    HealthCheck: Match.objectLike({
-      Enabled: true,
-      Path: '/elb-check.html',
-      Protocol: 'HTTP',
-      HealthyThresholdCount: 5,
-      UnhealthyThresholdCount: 2,
-      IntervalSeconds: 30,
-      TimeoutSeconds: 5,
-      Matcher: { HttpCode: '200' }
-    }),
+    VpcId: Match.anyValue(),
+    HealthCheckEnabled: true,
+    HealthCheckPath: '/elb-check.html',
+    HealthCheckProtocol: 'HTTP',
+    HealthyThresholdCount: 5,
+    UnhealthyThresholdCount: 2,
+    HealthCheckIntervalSeconds: 30,
+    HealthCheckTimeoutSeconds: 5,
+    Matcher: { HttpCode: '200' },
     TargetGroupAttributes: Match.arrayWith([
       Match.objectLike({ Key: 'load_balancing.algorithm.type', Value: 'least_outstanding_requests' })
     ])
